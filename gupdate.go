@@ -17,26 +17,36 @@ package gupdate
 import (
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/minio/selfupdate"
 )
 
-type ReleaseGetter interface {
-	getAllReleases() ([]Release, error)
+type LatestReleaseGetter interface {
 	getLatestRelease() (Release, error)
 }
+
+type AllReleasesGetter interface {
+	getAllReleases() ([]Release, error)
+}
+
+type CheckSumGetter interface {
+	GetChecksum(io.Reader) (string, error)
+}
+
+type ChecksumFunc func(io.Reader) (string, error)
 
 type Release struct {
 	Checksum string `json:"checksum,omitempty"`
 	URL      string `json:"url"`
 }
 
-func GetAllReleases(r ReleaseGetter) ([]Release, error) {
+func GetAllReleases(r AllReleasesGetter) ([]Release, error) {
 	return r.getAllReleases()
 }
 
-func GetLatestRelease(r ReleaseGetter) (Release, error) {
+func GetLatestRelease(r LatestReleaseGetter) (Release, error) {
 	return r.getLatestRelease()
 }
 

@@ -16,7 +16,7 @@ gh := gupdate.GitHubProject{
 	Owner:    "CoverWhale",
 	Platform: runtime.GOOS,
 	Arch:     runtime.GOARCH,
-	CheckSumGetter: gupdate.Goreleaser{},
+	CheckSumFunc: gupdate.GoReleaserChecksum,
 }
 
 release, err := gupdate.GetLatestRelease(gh)

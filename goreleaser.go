@@ -22,13 +22,7 @@ import (
 	"strings"
 )
 
-type CheckSumGetter interface {
-	GetChecksum(io.Reader) (string, error)
-}
-
-type Goreleaser struct{}
-
-func (g Goreleaser) GetChecksum(r io.Reader) (string, error) {
+func GoReleaserChecksum(r io.Reader) (string, error) {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
