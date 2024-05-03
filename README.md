@@ -11,7 +11,7 @@ This package wraps Minio's self updater package and allows for automatic downloa
 Create a project and then use gupdate to get the latest release and update the binary.
 
 ```
-gh := syncer.GitHubProject{
+gh := gupdate.GitHubProject{
 	Name:     "coverwhale-go",
 	Owner:    "CoverWhale",
 	Platform: runtime.GOOS,
