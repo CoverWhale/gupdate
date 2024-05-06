@@ -26,12 +26,11 @@ import (
 var githubReleaseURL = "https://api.github.com/repos"
 
 type GitHubProject struct {
-	Owner          string `json:"owner"`
-	Name           string `json:"name,omitempty"`
-	Platform       string `json:"platform"`
-	Arch           string `json:"arch"`
-	Checksum       string `json:"checksum"`
-	CheckSumGetter CheckSumGetter
+	Owner        string `json:"owner"`
+	Name         string `json:"name,omitempty"`
+	Platform     string `json:"platform"`
+	Arch         string `json:"arch"`
+	ChecksumFunc ChecksumFunc
 }
 
 type GitHubReleases []GitHubRelease
@@ -115,6 +114,11 @@ type GitHubAssets struct {
 func (g GitHubProject) getAllReleases() ([]Release, error) {
 	var releases []Release
 	var ghr []GitHubRelease
+
+	if g.ChecksumFunc == nil {
+		return releases, fmt.Errorf("checksum function must be defined")
+	}
+
 	url := fmt.Sprintf("%s/%s/%s/releases/latest", githubReleaseURL, g.Owner, g.Name)
 
 	data, err := sendRequest(url)
@@ -142,6 +146,11 @@ func (g GitHubProject) getAllReleases() ([]Release, error) {
 func (g GitHubProject) getLatestRelease() (Release, error) {
 	var release Release
 	var ghr GitHubRelease
+
+	if g.ChecksumFunc == nil {
+		return release, fmt.Errorf("checksum function must be defined")
+	}
+
 	url := fmt.Sprintf("%s/%s/%s/releases/latest", githubReleaseURL, g.Owner, g.Name)
 
 	data, err := sendRequest(url)
@@ -188,7 +197,7 @@ func (g GitHubProject) getChecksums(url string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	return g.CheckSumGetter.GetChecksum(resp.Body)
+	return g.ChecksumFunc(resp.Body)
 }
 
 func sendRequest(url string) ([]byte, error) {
