@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/minio/selfupdate"
 )
@@ -37,9 +38,12 @@ type CheckSumGetter interface {
 
 type ChecksumFunc func(io.Reader) (string, error)
 
+type RequestFunc func(r *http.Request)
+
 type Release struct {
 	Checksum string `json:"checksum,omitempty"`
 	URL      string `json:"url"`
+	ReqFunc  RequestFunc
 }
 
 func GetAllReleases(r AllReleasesGetter) ([]Release, error) {
@@ -51,7 +55,19 @@ func GetLatestRelease(r LatestReleaseGetter) (Release, error) {
 }
 
 func (r Release) Update() error {
-	resp, err := http.Get(r.URL)
+	client := http.Client{
+		Timeout: 10 * time.Second,
+	}
+	req, err := http.NewRequest(http.MethodGet, r.URL, nil)
+	if err != nil {
+		return err
+	}
+
+	if r.ReqFunc != nil {
+		r.ReqFunc(req)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
