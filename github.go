@@ -15,6 +15,7 @@
 package gupdate
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,12 +26,19 @@ import (
 
 var githubReleaseURL = "https://api.github.com/repos"
 
+type requestOpts struct {
+	url    string
+	accept string
+}
+
 type GitHubProject struct {
 	Owner        string `json:"owner"`
 	Name         string `json:"name,omitempty"`
 	Platform     string `json:"platform"`
 	Arch         string `json:"arch"`
 	ChecksumFunc ChecksumFunc
+	Token        string
+	ReqFunc      RequestFunc
 }
 
 type GitHubReleases []GitHubRelease
@@ -121,7 +129,7 @@ func (g GitHubProject) getAllReleases() ([]Release, error) {
 
 	url := fmt.Sprintf("%s/%s/%s/releases/latest", githubReleaseURL, g.Owner, g.Name)
 
-	data, err := sendRequest(url)
+	data, err := g.sendRequest(requestOpts{url: url, accept: "applicatioin/vhd.github+json"})
 	if err != nil {
 		return releases, err
 	}
@@ -136,7 +144,7 @@ func (g GitHubProject) getAllReleases() ([]Release, error) {
 		}
 		for _, v := range release.Assets {
 			if strings.Contains(v.Name, strings.ToLower(g.Platform)) && strings.Contains(v.Name, strings.ToLower(g.Arch)) {
-				releases = append(releases, Release{URL: v.BrowserDownloadURL})
+				releases = append(releases, Release{URL: v.URL})
 			}
 		}
 	}
@@ -153,7 +161,7 @@ func (g GitHubProject) getLatestRelease() (Release, error) {
 
 	url := fmt.Sprintf("%s/%s/%s/releases/latest", githubReleaseURL, g.Owner, g.Name)
 
-	data, err := sendRequest(url)
+	data, err := g.sendRequest(requestOpts{url: url, accept: "application/vnd.github+json"})
 	if err != nil {
 		return release, err
 	}
@@ -168,13 +176,13 @@ func (g GitHubProject) getLatestRelease() (Release, error) {
 
 	for _, v := range ghr.Assets {
 		if strings.Contains(v.Name, strings.ToLower(g.Platform)) && strings.Contains(v.Name, strings.ToLower(g.Arch)) {
-			release.URL = v.BrowserDownloadURL
+			release.URL = v.URL
 		}
 	}
 
 	for _, v := range ghr.Assets {
 		if strings.Contains(v.Name, "checksum") {
-			checksum, err := g.getChecksums(v.BrowserDownloadURL)
+			checksum, err := g.getChecksums(v.URL)
 			if err != nil {
 				return release, err
 			}
@@ -187,30 +195,39 @@ func (g GitHubProject) getLatestRelease() (Release, error) {
 		return release, fmt.Errorf("no results")
 	}
 
+	if g.Token != "" {
+		release.ReqFunc = GitHubAuthRequests(g.Token, "application/octet-stream")
+	}
+
 	return release, nil
 }
 
 func (g GitHubProject) getChecksums(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := g.sendRequest(requestOpts{url: url, accept: "application/octet-stream"})
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
 
-	return g.ChecksumFunc(resp.Body)
+	return g.ChecksumFunc(bytes.NewReader(resp))
 }
 
-func sendRequest(url string) ([]byte, error) {
+func (g GitHubProject) sendRequest(opts requestOpts) ([]byte, error) {
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, opts.url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Add("Accept", `application/vnd.github+json`)
+	req.Header.Add("Content-Type", "application/json")
+
+	if g.ReqFunc == nil && g.Token != "" {
+		g.ReqFunc = GitHubAuthRequests(g.Token, opts.accept)
+	}
+
+	g.ReqFunc(req)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -223,5 +240,17 @@ func sendRequest(url string) ([]byte, error) {
 		return nil, err
 	}
 
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("%d %s", resp.StatusCode, string(data))
+	}
+
 	return data, nil
+}
+
+func GitHubAuthRequests(token, accept string) RequestFunc {
+	return func(req *http.Request) {
+		bearer := fmt.Sprintf("Bearer %s", token)
+		req.Header.Add("Authorization", bearer)
+		req.Header.Add("Accept", accept)
+	}
 }

@@ -16,7 +16,7 @@ gh := gupdate.GitHubProject{
 	Owner:    "CoverWhale",
 	Platform: runtime.GOOS,
 	Arch:     runtime.GOARCH,
-	CheckSumFunc: gupdate.GoReleaserChecksum,
+	ChecksumFunc: gupdate.GoReleaserChecksum,
 }
 
 release, err := gupdate.GetLatestRelease(gh)
@@ -28,3 +28,9 @@ if err := release.Update(); err != nil {
 	log.Fatal(err)
 }
 ```
+
+## Private Repos
+
+For GitHub projects there is a Token field on the `GitHubProject` struct. This will automatically add the token to the request and use the correct headers.
+
+It sets a `RequestFunc` under the hood which sets the token and accept types. This can be overridden if needed on both the GitHubProject and the Release.
