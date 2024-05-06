@@ -195,9 +195,8 @@ func (g GitHubProject) getLatestRelease() (Release, error) {
 		return release, fmt.Errorf("no results")
 	}
 
-	if g.Token != "" {
-		release.ReqFunc = GitHubAuthRequests(g.Token, "application/octet-stream")
-	}
+	// set default release request function
+	release.ReqFunc = GitHubReqFunc(g.Token, "application/octet-stream")
 
 	return release, nil
 }
@@ -221,13 +220,17 @@ func (g GitHubProject) sendRequest(opts requestOpts) ([]byte, error) {
 		return nil, err
 	}
 
-	req.Header.Add("Content-Type", "application/json")
-
 	if g.ReqFunc == nil && g.Token != "" {
-		g.ReqFunc = GitHubAuthRequests(g.Token, opts.accept)
+		g.ReqFunc = GitHubReqFunc(g.Token, opts.accept)
 	}
 
-	g.ReqFunc(req)
+	if g.ReqFunc != nil {
+		g.ReqFunc(req)
+	}
+
+	if g.ReqFunc == nil {
+		req.Header.Add("Accept", opts.accept)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -247,10 +250,12 @@ func (g GitHubProject) sendRequest(opts requestOpts) ([]byte, error) {
 	return data, nil
 }
 
-func GitHubAuthRequests(token, accept string) RequestFunc {
+func GitHubReqFunc(token, accept string) RequestFunc {
 	return func(req *http.Request) {
-		bearer := fmt.Sprintf("Bearer %s", token)
-		req.Header.Add("Authorization", bearer)
+		if token != "" {
+			bearer := fmt.Sprintf("Bearer %s", token)
+			req.Header.Add("Authorization", bearer)
+		}
 		req.Header.Add("Accept", accept)
 	}
 }
